@@ -1,0 +1,47 @@
+plot(cars)
+
+# variable setup
+n_steps <- 100                  
+
+
+reg_strength <- 5               # (1~10)
+supply_legal <- rep(100, n_steps)
+supply_illegal <- rep(40, n_steps)
+price_legal <- rep(10, n_steps)
+price_illegal <- rep(8, n_steps)
+demand_legal <- rep(70, n_steps)
+demand_illegal <- rep(30, n_steps)
+
+for (t in 2:n_steps) {
+  # legal supply decrease according to the reg
+  supply_legal[t] <- max(0, supply_legal[t-1] - reg_strength * 2)
+
+  # supply decrease - price increase, illegal demand increase - price increase
+  price_legal[t] <- price_legal[t-1] + reg_strength * 0.75
+  price_illegal[t] <- price_illegal[t-1] + demand_illegal[t-1] / 20
+
+  # adjust demand according to price
+  demand_legal[t] <- max(0, 70 - (price_legal[t] - 10) * 5)
+  demand_illegal[t] <- max(0, 30 + (price_legal[t] - 10) * 4)
+}
+
+# dataframe
+df <- data.frame(
+  step = 1:n_steps,
+  price_legal,
+  price_illegal,
+  supply_legal,
+  supply_illegal,
+  demand_legal,
+  demand_illegal
+)
+
+# visualization
+library(ggplot2)
+ggplot(df, aes(x=step)) +
+  geom_line(aes(y=price_legal, color="price-legal")) +
+  geom_line(aes(y=price_illegal, color="price-illegal")) +
+  geom_line(aes(y=demand_legal, color="demand-legal")) +
+  geom_line(aes(y=demand_illegal, color="demand-illegal")) +
+  labs(title="Cannabis market dynamic simultaion", x="time(days)", y="variable") +
+  theme_minimal()
