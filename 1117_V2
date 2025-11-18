@@ -1,0 +1,145 @@
+## ------------------------------
+## 피드백 루프 시뮬레이션 (R)
+## R: Regulation intensity
+## E: Enforcement level
+## PL: Legal market price
+## DL: Legal demand
+## DI: Illegal demand
+## ------------------------------
+
+# 1. 시뮬레이션 길이 (기간)
+T <- 200   # 200 스텝(예: 200 기간)
+
+# 2. 벡터 초기화
+R  <- numeric(T)
+E  <- numeric(T)
+PL <- numeric(T)
+DL <- numeric(T)
+DI <- numeric(T)
+
+# 3. 파라미터 설정 -----------------------------------
+
+# 전체 잠재 수요
+total_demand_base  <- 100
+demand_legal<-80
+demand_Illegal<-20
+
+# 안전성 때문에 항상 합법으로 남는 최소 수요
+legal_min_demand   <- 20   # 예: 최소 20은 합법에서 산다
+
+# 나머지(가격에 민감한) 합법 수요의 최대치
+legal_demand_var_max  <- total_demand_base - legal_min_demand
+
+# 가격 탄력성
+legal_price_elasticity <- 0.8
+
+
+# 초기 규제 / 집행 수준
+R[1] <- 2
+E[1] <- 2
+
+# 초기 수요
+DL[1] <- 80
+DI[1] <- 20
+
+
+# 가격/수요 관련 파라미터
+base_legal_price      <- 2
+reg_price_sensitivity <- 1.5  # 규제의 가격 영향
+
+# 불법
+illegal_demand_base   <- 10
+illegal_substitution  <- 1.2  # 합법 수요 감소분이 불법으로 얼마나 이동하는지
+enforcement_elasticity <- 0.5
+
+# 정책 반응
+enforcement_response  <- 0.2
+enforcement_decay     <- 0.02  # 집행 decay
+target_DI             <- 10    # 허용 가능한 불법 수요 수준
+
+regulation_response   <- 0.1
+regulation_decay      <- 0.01
+target_E              <- 1.5
+
+# 4. 시뮬레이션 루프 ---------------------------------
+
+for (t in 1:(T - 1)) {
+
+  ## (1) 가격 계산
+  PL[t] <- base_legal_price + reg_price_sensitivity * R[t]
+  PL[t] <- max(PL[t], 0)
+
+  ## (2) 합법 수요 DL
+  #   - 안전성 때문에 항상 유지되는 최소 합법 수요
+  #   - + 가격에 따라 줄어드는 추가 합법 수요
+  DL_var_part <- legal_demand_var_max - legal_price_elasticity * PL[t]
+  DL_var_part <- max(DL_var_part, 0)
+
+  DL[t] <- legal_min_demand + DL_var_part
+
+  # 전체 잠재 수요(total_demand_base)를 넘지 않도록 제한
+  DL[t] <- min(DL[t], total_demand_base)
+
+  ## (3) 불법 수요 DI
+  #   - 전체 잠재 수요 중 합법이 충족하지 못한 부분이 불법으로 이동
+  #   - + 기본 불법 수요
+  #   - - 집행(E)이 강할수록 감소
+  DI[t] <- illegal_demand_base +
+           illegal_substitution * (total_demand_base - DL[t]) -
+           enforcement_elasticity * E[t]
+  DI[t] <- max(DI[t], 0)
+
+  ## (4) 집행 E, 규제 R 업데이트
+  E[t + 1] <- E[t] +
+              enforcement_response * (DI[t] - target_DI) -
+              enforcement_decay * E[t]
+  E[t + 1] <- max(E[t + 1], 0)
+
+  R[t + 1] <- R[t] +
+              regulation_response * (E[t] - target_E) -
+              regulation_decay * R[t]
+  R[t + 1] <- max(R[t + 1], 0)
+}
+
+# 5. 마지막 시점(T)의 가격/수요 계산 ------------------
+
+PL[T] <- base_legal_price + reg_price_sensitivity * R[T]
+PL[T] <- max(PL[T], 0)
+
+DL_var_part_T <- legal_demand_var_max - legal_price_elasticity * PL[T]
+DL_var_part_T <- max(DL_var_part_T, 0)
+
+DL[T] <- legal_min_demand + DL_var_part_T
+DL[T] <- min(DL[T], total_demand_base)
+
+DI[T] <- illegal_demand_base +
+         illegal_substitution * (total_demand_base - DL[T]) -
+         enforcement_elasticity * E[T]
+DI[T] <- max(DI[T], 0)
+
+# 6. 결과 간단히 플롯 ---------------------------------
+
+par(mfrow = c(2, 2))
+
+# (1) 규제 R
+plot(1:T, R, type = "l",
+     xlab = "time", ylab = "Regulation (R)",
+     main = "Regulation intensity over time")
+
+# (2) 집행 E
+plot(1:T, E, type = "l",
+     xlab = "time", ylab = "Enforcement (E)",
+     main = "Enforcement level over time")
+
+# (3) 합법 vs 불법 수요
+plot(1:T, DL, type = "l",
+     xlab = "time", ylab = "Demand",
+     main = "Legal vs Illegal Demand")
+lines(1:T, DI, lty = 2)
+legend("topright", legend = c("DL (legal)", "DI (illegal)"),
+       lty = c(1, 2), bty = "n")
+
+# (4) 합법 가격
+plot(1:T, PL, type = "l",
+     xlab = "time", ylab = "Price (PL)",
+     main = "Legal market price over time")
